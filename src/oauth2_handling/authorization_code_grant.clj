@@ -42,27 +42,42 @@
   [{:keys [access-token-uri client-id client-secret base-redirect-uri]}
    code
    & {:keys [next]}]
-  ;; TODO other params
-
-  ;; this an attempt to be HTTP client agnostic. I'm presuming we take
-  ;; this result and give it to a protocol fn like `http/execute`
-  (merge {:request-method :post
-          :query-params {}
-          :form-params {"grant_type" "authorization_code"
-                        "code" code
+  ;; this an attempt to be HTTP client agnostic. Take this and give it
+  ;; to the oauth-config's execute-request function.
+  (let [request
+        #_
+        (merge {:request-method :post
+                :url access-token-uri
+                ;; FIXME: here we're relying on clj-http to form-urlencode
+                ;; these, but this function should instead yield a `:body`
+                ;; with an appropriately encoded value.
+                :form-params {"grant_type" "authorization_code"
+                              "code" code
+                              "redirect_uri" (redirect-uri base-redirect-uri next)
+                              "client_id" client-id}}
+               (when client-secret
+                 ;; <https://www.rfc-editor.org/rfc/rfc6749#section-2.3>. Although
+                 ;; the standard suggests that other ways of authenticating
+                 ;; the client are possible, supporting HTTP basic
+                 ;; authentication
+                 ;; (<https://www.rfc-editor.org/rfc/rfc2617>) is required.
+                 {:headers {"Authorization"
+                            (as-> (format "%s:%s" client-id client-secret) %
+                              (.getBytes % "UTF-8")
+                              (.encodeToString (Base64/getEncoder) %)
+                              (str "Basic " %))}}))
+        ;; Does GitHub want stuff in query parameters instead of form
+        ;; parameters?
+        {:request-method :post
+         :url access-token-uri
+         :query-params {"code" code
                         "redirect_uri" (redirect-uri base-redirect-uri next)
-                        "client_id" client-id}}
-         (when client-secret
-           ;; <https://www.rfc-editor.org/rfc/rfc6749#section-2.3>. Although
-           ;; the standard suggests that other ways of authenticating
-           ;; the client are possible, supporting HTTP basic
-           ;; authentication
-           ;; (<https://www.rfc-editor.org/rfc/rfc2617>) is required.
-           {:headers {"Authorization"
-                      (as-> (format "%s:%s" client-id client-secret) %
-                        (.getBytes % "UTF-8")
-                        (.encode (Base64/getEncoder) %)
-                        (str "Basic " %))}})))
+                        "client_id" client-id
+                        "client_secret" client-secret}
+         :accept :json}]
+    ;; FIXME for debugging
+    (def _request request)
+    request))
 
 (defn authorization-response-handler
   "Make a Ring handler to handle the authorization response from the
@@ -74,7 +89,7 @@
   Requires `ring.middleware.params/wrap-params`. Requires
   `ring.middleware.session/wrap-session`, and that the `request`'s
   `:session` includes `::expected-state`."
-  [{:as oauth-config :keys [client-id base-redirect-uri]}]
+  [{:as oauth-config :keys [client-id base-redirect-uri execute-request]}]
   (fn [{:as request
         {:as session ::keys [expected-state]} :session
         {:strs [error state code next]} :query-params}]
@@ -88,7 +103,16 @@
       :else
       {:status 302
        :headers {"Location" next}
+       ;; FIXME: putting the access token etc in the session is
+       ;; opinionated.
        :session
-       (assoc
-        session
-        ::access-token (access-token-request oauth-config code :next next))})))
+       (let [{access-token "access_token", refresh-token "refresh_token"}
+             ;; <https://www.rfc-editor.org/rfc/rfc6749#section-5.1>. TODO
+             ;; this needs to be documented somehow. Make executing an
+             ;; access token request first class?
+             (execute-request
+              (access-token-request oauth-config code :next next))]
+         (-> session
+             (dissoc ::expected-state)
+             (merge #::{:access-token access-token
+                        :refresh-token refresh-token})))})))
