@@ -106,7 +106,7 @@
        ;; FIXME: putting the access token etc in the session is
        ;; opinionated.
        :session
-       (let [{access-token "access_token", refresh-token "refresh_token"}
+       (let [{{access-token "access_token", refresh-token "refresh_token"} :body}
              ;; <https://www.rfc-editor.org/rfc/rfc6749#section-5.1>. TODO
              ;; this needs to be documented somehow. Make executing an
              ;; access token request first class?
