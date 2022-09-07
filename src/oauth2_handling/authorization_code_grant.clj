@@ -45,16 +45,24 @@
   ;; this an attempt to be HTTP client agnostic. Take this and give it
   ;; to the oauth-config's execute-request function.
   (let [request
-        #_
         (merge {:request-method :post
                 :url access-token-uri
                 ;; FIXME: here we're relying on clj-http to form-urlencode
                 ;; these, but this function should instead yield a `:body`
                 ;; with an appropriately encoded value.
-                :form-params {"grant_type" "authorization_code"
-                              "code" code
-                              "redirect_uri" (redirect-uri base-redirect-uri next)
-                              "client_id" client-id}}
+                :form-params
+                (merge {"grant_type" "authorization_code"
+                        "code" code
+                        "redirect_uri" (redirect-uri base-redirect-uri next)}
+                       (when-not client-secret
+                         ;; https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3 "REQUIRED,
+                         ;; if the client is not authenticating with
+                         ;; the authorization server as described in
+                         ;; Section 3.2.1."
+                         {"client_id" client-id}))
+                ;; FIXME GitHub requires this, or else the response
+                ;; will be application/x-www-form-urlencoded.
+                :accept :json}
                (when client-secret
                  ;; <https://www.rfc-editor.org/rfc/rfc6749#section-2.3>. Although
                  ;; the standard suggests that other ways of authenticating
@@ -65,16 +73,7 @@
                             (as-> (format "%s:%s" client-id client-secret) %
                               (.getBytes % "UTF-8")
                               (.encodeToString (Base64/getEncoder) %)
-                              (str "Basic " %))}}))
-        ;; Does GitHub want stuff in query parameters instead of form
-        ;; parameters?
-        {:request-method :post
-         :url access-token-uri
-         :query-params {"code" code
-                        "redirect_uri" (redirect-uri base-redirect-uri next)
-                        "client_id" client-id
-                        "client_secret" client-secret}
-         :accept :json}]
+                              (str "Basic " %))}}))]
     ;; FIXME for debugging
     (def _request request)
     request))
@@ -82,9 +81,6 @@
 (defn authorization-response-handler
   "Make a Ring handler to handle the authorization response from the
   authorization server. Install the handler under e.g. GET /login.
-
-  `redirect` is a function that, given a Ring request, extracts the
-  URI that's used to redirect the user, via a 302 Found, to
 
   Requires `ring.middleware.params/wrap-params`. Requires
   `ring.middleware.session/wrap-session`, and that the `request`'s
