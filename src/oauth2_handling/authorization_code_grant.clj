@@ -6,6 +6,9 @@
 (defn- encode [^String s]
   (URLEncoder/encode s "US-ASCII"))
 
+(defn- encode-params [params]
+  (str/join \& (map (fn [[k v]] (str (encode k) \= (encode v))) params)))
+
 (defn- query
   "Add query parameters to `uri`. The query parameters will be encoded
   per <https://www.rfc-editor.org/rfc/rfc6749#appendix-B>."
@@ -13,8 +16,7 @@
   ;; impl note: currently uri is a string, but this fn could be a
   ;; protocol function with impls for `java.net.URI`,
   ;; <https://github.com/lambdaisland/uri>, etc.
-  (str uri \?
-       (str/join \& (map (fn [[k v]] (str k \= (encode v))) query-params))))
+  (str uri \? (encode-params query-params)))
 
 (defn redirect-uri
   "Make a redirect URI appropriate for an authorization request or an
@@ -45,35 +47,35 @@
   ;; this an attempt to be HTTP client agnostic. Take this and give it
   ;; to the oauth-config's execute-request function.
   (let [request
-        (merge {:request-method :post
-                :url access-token-uri
-                ;; FIXME: here we're relying on clj-http to form-urlencode
-                ;; these, but this function should instead yield a `:body`
-                ;; with an appropriately encoded value.
-                :form-params
+        {:request-method :post
+         :url access-token-uri
+         :body (encode-params
                 (merge {"grant_type" "authorization_code"
                         "code" code
                         "redirect_uri" (redirect-uri base-redirect-uri next)}
                        (when-not client-secret
-                         ;; https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3 "REQUIRED,
+                         ;; <https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3> "REQUIRED,
                          ;; if the client is not authenticating with
                          ;; the authorization server as described in
                          ;; Section 3.2.1."
-                         {"client_id" client-id}))
-                ;; FIXME GitHub requires this, or else the response
-                ;; will be application/x-www-form-urlencoded.
-                :accept :json}
-               (when client-secret
-                 ;; <https://www.rfc-editor.org/rfc/rfc6749#section-2.3>. Although
-                 ;; the standard suggests that other ways of authenticating
-                 ;; the client are possible, supporting HTTP basic
-                 ;; authentication
-                 ;; (<https://www.rfc-editor.org/rfc/rfc2617>) is required.
-                 {:headers {"Authorization"
-                            (as-> (format "%s:%s" client-id client-secret) %
-                              (.getBytes % "UTF-8")
-                              (.encodeToString (Base64/getEncoder) %)
-                              (str "Basic " %))}}))]
+                         {"client_id" client-id})))
+         :headers (merge
+                   ;; <https://www.rfc-editor.org/rfc/rfc6749#section-2.3>. Although
+                   ;; the standard suggests that other ways of authenticating
+                   ;; the client are possible, supporting HTTP basic
+                   ;; authentication
+                   ;; (<https://www.rfc-editor.org/rfc/rfc2617>) is
+                   ;; required.
+                   (when client-secret
+                     {"Authorization"
+                      (as-> (format "%s:%s" client-id client-secret) %
+                        (.getBytes % "UTF-8")
+                        (.encodeToString (Base64/getEncoder) %)
+                        (str "Basic " %))})
+                   {"Content-Type" "application/x-www-form-urlencoded"}
+                   ;; FIXME GitHub requires this, or else the response
+                   ;; will be application/x-www-form-urlencoded.
+                   {"Accept" "application/json"})}]
     ;; FIXME for debugging
     (def _request request)
     request))
