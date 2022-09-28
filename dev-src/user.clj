@@ -16,17 +16,21 @@
       io/reader
       PushbackReader.
       edn/read
+      :github
       (assoc :execute-request oauth2-handling.clj-http/execute-request)))
 
-(defn rudimentary-app
+(defn routes
   [{:as request :keys [request-method uri]}]
   (cond
-    (and (= request-method :get) (= uri "/oauth"))
-    ((oauth2-handling.authorization-code-grant/authorization-response-handler
-      oauth-config)
-     request)
+    (and (= request-method :get) (= uri "/show_session"))
+    {:status 200
+     :body
+     (-> request
+         :session
+         pr
+         with-out-str)}
     ,
-    (and (= request-method :get) (= uri "/foo"))
+    (and (= request-method :get) (= uri "/github_user"))
     (do
       {:status 200
        :body
@@ -45,6 +49,21 @@
       (println "could not handle request")
       (prn request)
       {:status 500})))
+
+(defn rudimentary-app
+  [{:as request :keys [request-method uri]}]
+  (cond
+    (and (= request-method :get) (= uri "/oauth"))
+    ((oauth2-handling.authorization-code-grant/authorization-response-handler
+      oauth-config)
+     request)
+    ,
+    :else
+    ((oauth2-handling.authorization-code-grant/wrap-oauth
+      routes
+      oauth-config
+      :scopes ["https://www.googleapis.com/auth/userinfo.email"])
+     request)))
 
 (def sessions (atom {}))
 
