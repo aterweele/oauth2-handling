@@ -57,39 +57,35 @@
    & {:keys []}]
   ;; this an attempt to be HTTP client agnostic. Take this and give it
   ;; to the oauth-config's execute-request function.
-  (let [request
-        {:request-method :post
-         :url access-token-uri
-         :body (encode-params
-                (merge {"grant_type" "authorization_code"
-                        "code" code
-                        "redirect_uri" redirect-uri}
-                       (when-not client-secret
-                         ;; <https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3> "REQUIRED,
-                         ;; if the client is not authenticating with
-                         ;; the authorization server as described in
-                         ;; Section 3.2.1."
-                         {"client_id" client-id})))
-         :headers (merge
-                   ;; <https://www.rfc-editor.org/rfc/rfc6749#section-2.3>. Although
-                   ;; the standard suggests that other ways of authenticating
-                   ;; the client are possible, supporting HTTP basic
-                   ;; authentication
-                   ;; (<https://www.rfc-editor.org/rfc/rfc2617>) is
-                   ;; required.
-                   (when client-secret
-                     {"Authorization"
-                      (as-> (format "%s:%s" client-id client-secret) %
-                        (.getBytes % "UTF-8")
-                        (.encodeToString (Base64/getEncoder) %)
-                        (str "Basic " %))})
-                   {"Content-Type" "application/x-www-form-urlencoded"}
-                   ;; FIXME GitHub requires this, or else the response
-                   ;; will be application/x-www-form-urlencoded.
-                   {"Accept" "application/json"})}]
-    ;; FIXME for debugging
-    (def _request request)
-    request))
+  {:request-method :post
+   :url access-token-uri
+   :body (encode-params
+          (merge {"grant_type" "authorization_code"
+                  "code" code
+                  "redirect_uri" redirect-uri}
+                 (when-not client-secret
+                   ;; <https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3> "REQUIRED,
+                   ;; if the client is not authenticating with the
+                   ;; authorization server as described in Section
+                   ;; 3.2.1."
+                   {"client_id" client-id})))
+   :headers (merge
+             ;; <https://www.rfc-editor.org/rfc/rfc6749#section-2.3>. Although
+             ;; the standard suggests that other ways of authenticating
+             ;; the client are possible, supporting HTTP basic
+             ;; authentication
+             ;; (<https://www.rfc-editor.org/rfc/rfc2617>) is
+             ;; required.
+             (when client-secret
+               {"Authorization"
+                (as-> (format "%s:%s" client-id client-secret) %
+                  (.getBytes % "UTF-8")
+                  (.encodeToString (Base64/getEncoder) %)
+                  (str "Basic " %))})
+             {"Content-Type" "application/x-www-form-urlencoded"}
+             ;; FIXME GitHub requires this, or else the response will
+             ;; be application/x-www-form-urlencoded.
+             {"Accept" "application/json"})})
 
 (defn authorization-response-handler
   "Make a Ring handler to handle the authorization response from the
@@ -104,8 +100,6 @@
     ;; it's possible that I may want to use
     ;; `ring.middleware.params/assoc-query-params` myself so that I
     ;; can specify the encoding.
-    (prn "session" session)
-    (prn "state" state)
     (if error
       ;; <https://www.rfc-editor.org/rfc/rfc6749#section-4.1.2.1>
       {:status 400}                 ; TODO improve
