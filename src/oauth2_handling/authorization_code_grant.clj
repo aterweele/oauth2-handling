@@ -22,11 +22,11 @@
 (defn authorization-request-uri
   "Construct the authorization request URI per
   <https://www.rfc-editor.org/rfc/rfc6749#section-4.1.1>."
-  [{:keys [authorization-uri client-id base-redirect-uri]}
+  [{:keys [authorization-uri client-id redirect-uri]}
    & {:keys [scopes csrf-state]}]
   (query authorization-uri
          (cond-> {"response_type" "code", "client_id" client-id}
-           base-redirect-uri (assoc "redirect_uri" base-redirect-uri)
+           redirect-uri (assoc "redirect_uri" redirect-uri)
            (seq scopes) (assoc "scope" (str/join \space scopes))
            csrf-state (assoc "state" csrf-state))))
 
@@ -52,7 +52,7 @@
 (defn access-token-request
   "An HTTP request to trade the `code` for an access token as per
   <https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3>."
-  [{:keys [access-token-uri client-id client-secret base-redirect-uri]}
+  [{:keys [access-token-uri client-id client-secret redirect-uri]}
    code
    & {:keys []}]
   ;; this an attempt to be HTTP client agnostic. Take this and give it
@@ -63,7 +63,7 @@
          :body (encode-params
                 (merge {"grant_type" "authorization_code"
                         "code" code
-                        "redirect_uri" base-redirect-uri}
+                        "redirect_uri" redirect-uri}
                        (when-not client-secret
                          ;; <https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3> "REQUIRED,
                          ;; if the client is not authenticating with
@@ -97,7 +97,7 @@
 
   Requires `ring.middleware.params/wrap-params` and
   `ring.middleware.session/wrap-session`."
-  [{:as oauth-config :keys [client-id base-redirect-uri execute-request]}]
+  [{:as oauth-config :keys [client-id execute-request]}]
   (fn [{:as request
         {:as session ::keys [states]} :session
         {:strs [error state code]} :query-params}]
