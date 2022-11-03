@@ -52,9 +52,7 @@
 (defn access-token-request
   "An HTTP request to trade the `code` for an access token as per
   <https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3>."
-  [{:keys [access-token-uri client-id client-secret redirect-uri]}
-   code
-   & {:keys []}]
+  [{:keys [access-token-uri client-id client-secret redirect-uri]} code]
   ;; this an attempt to be HTTP client agnostic. Take this and give it
   ;; to the oauth-config's execute-request function.
   {:request-method :post
