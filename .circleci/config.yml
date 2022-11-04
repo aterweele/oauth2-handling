@@ -7,8 +7,19 @@ jobs:
     steps:
       - checkout
       - run: lein test
+  deploy:
+    docker:
+      - image: cimg/clojure:1.11.1
+    steps:
+      - checkout
+      - run: lein deploy
 
 workflows:
   test:
     jobs:
       - test
+      - deploy:
+          filters:
+            branches:
+              only: /release/
+          context: clojars
