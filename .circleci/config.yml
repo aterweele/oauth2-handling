@@ -7,3 +7,8 @@ jobs:
     steps:
       - checkout
       - run: lein test
+
+workflows:
+  test:
+    jobs:
+      - test
