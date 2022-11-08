@@ -11,4 +11,5 @@
                                   [cheshire "5.11.0"]]}}
   :deploy-repositories [["clojars" {:username "atw"
                                     :password :env/deploy_token}]
-                        ["releases" :clojars]])
+                        ["releases" :clojars]
+                        ["snapshots" :clojars]])
